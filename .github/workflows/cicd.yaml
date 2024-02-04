@@ -1,0 +1,60 @@
+name: 'Build and deploy frontend'
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  build:
+    runs-on: 'ubuntu-latest'
+    name: 'Build code'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        name: 'Install Node'
+        with:
+          node-version: '12.x'
+
+      - name: 'Install Dependency'
+        run: |
+          node -v
+          npm install
+
+      - name: 'Build source code'
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        name: 'Upload build as artifact'
+        with:
+          name: build
+          path: build
+
+  deploy_to_s3:
+    runs-on: 'ubuntu-latest'
+    name: 'Deploy code to S3'
+    steps:
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+          path: build
+
+      - uses: keithweaver/aws-s3-github-action@v1.0.0
+        with:
+          command: cp
+          source: ./build
+          destination: ${{ secrets.S3_BUCKET }}
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: us-east-1
+
+      - name: Invalidate CloudFront
+        uses: chetan/invalidate-cloudfront-action@v2
+        env:
+          DISTRIBUTION: ${{ secrets.DISTRIBUTION }}
+          PATHS: "/*"
+          AWS_REGION: "us-east-1"
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
